@@ -17,7 +17,7 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.sql.SQLException;
 import java.util.ArrayList;
-// TODO import java.util.concurrent.Callable;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
 import com.google.common.cache.Cache;
@@ -34,23 +34,11 @@ public class GuavaCacheTest02 {
             .build();
         conn = null;
         Statement stmt = null;
+        String dbname = args[0];
         try {
             Class.forName("org.sqlite.JDBC");
-            conn = DriverManager.getConnection("jdbc:sqlite:guava_cache.db");
-            stmt = conn.createStatement();
-            String sql = "DROP TABLE IF EXISTS HEAP";
-            stmt.executeUpdate(sql);
-            sql = "CREATE TABLE HEAP" +
-                  "( objid INT PRIMARY KEY  NOT NULL," +
-                  "  age            INT     NOT NULL, " +
-                  "  alloctime      INT     NOT NULL, " +
-                  "  deathtime      INT, " +
-                  "  type           CHAR(4096) )";
-            stmt.executeUpdate(sql);
-            stmt.close();
-            String filename = (args.length > 0) ? args[0] : "";
-            // TODO hardcoded filename
-            processInput( filename );
+            conn = DriverManager.getConnection("jdbc:sqlite:" + dbname);
+            processInput();
             conn.close();
         } catch ( Exception e ) {
             System.err.println( e.getClass().getName() + ": " + e.getMessage() );
@@ -89,15 +77,12 @@ public class GuavaCacheTest02 {
         return true;
     }
 
-    private static void processInput( String filename ) throws SQLException, ExecutionException {
+    private static void processInput() throws SQLException, ExecutionException {
         try {
             int i = 0;
             String line;
-            ArrayList<UpdateRecord> updateList = new ArrayList<UpdateRecord>();
             try (
-                  InputStream fis = (!filename.isEmpty()) ? new FileInputStream( filename )
-                                                          : System.in;
-                  InputStreamReader isr = new InputStreamReader(fis, Charset.forName("UTF-8"));
+                  InputStreamReader isr = new InputStreamReader(System.in, Charset.forName("UTF-8"));
                   BufferedReader bufreader = new BufferedReader(isr);
             ) {
                 int timeByMethod = 0;
@@ -105,22 +90,18 @@ public class GuavaCacheTest02 {
                     // Deal with the line
                     String[] fields = line.split(" ");
                     if (isAllocation(fields[0])) {
-                        ObjectRecord rec = parseAllocation( fields, timeByMethod );
-                        try {
-							putIntoDB( rec );
-						} catch (SQLException e) {
-							// TODO Auto-generated catch block
-							e.printStackTrace();
-                            continue;
-						}
-                        int objId = rec.get_objId();
-                        cache.put( objId, rec );
+                        continue;
                     }
                     else if (isUpdate(fields[0])) {
                         UpdateRecord rec = parseUpdate( fields, timeByMethod );
-                        updateList.add(rec);
+                        int objId = rec.get_objId();
+                        ObjectRecord tmprec = cache.get( objId,
+                                                         new Callable<ObjectRecord>() {
+                                                             public ObjectRecord call() throws SQLException {
+                                                                 return getFromDB( objId );
+                                                             }
+                                                         } );
                     }
-
                     i += 1;
                     if (i % 10000 == 1) {
                         System.out.print(".");
