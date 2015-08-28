@@ -73,13 +73,3 @@ public class ObjectRecord {
 
 
 }
-//    public ObjectRecord( int myId,
-//                         int objId,
-//                         int age,
-//                         int allocTime,
-//                         int deathTime,
-//                         String myType ) {
-//
-//        super();
-//        this.
-//    }
